@@ -80,7 +80,7 @@ jobs:
           key: windows-go-modcache-test-${{ hashFiles('**/go.sum') }}
 
   reproduce-windows-cache-fast:
-    name: Windows Cache Fast (D: drive)
+    name: Windows Cache Fast
     runs-on: windows-latest
     needs: reproduce-windows-cache-slow
 
