@@ -4,17 +4,28 @@ on:
   workflow_dispatch:
 
 jobs:
-  cache-go:
+  build:
     runs-on: windows-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create big go.mod
+      # Step 1: Setup Go with caching enabled
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+          check-latest: false
+
+      # Step 2: Create go.mod with heavy dependencies
+      - name: Create go.mod
         shell: pwsh
         run: |
           @"
           module bigcachetest
+
           go 1.22
 
           require (
@@ -33,23 +44,62 @@ jobs:
           )
           "@ | Out-File -Encoding UTF8 go.mod
 
-      - name: Generate go.sum
+      # Step 3: Add a dummy file to make imports reachable
+      - name: Create dummy main.go
+        shell: pwsh
+        run: |
+          @"
+          package main
+
+          import (
+            _ "k8s.io/kubernetes"
+            _ "github.com/moby/moby"
+            _ "github.com/hashicorp/terraform"
+            _ "github.com/aws/aws-sdk-go/aws"
+            _ "github.com/prometheus/prometheus"
+            _ "github.com/grafana/grafana"
+            _ "github.com/apache/beam"
+            _ "github.com/google/go-containerregistry/pkg/v1"
+            _ "github.com/grpc/grpc-go"
+            _ "github.com/istio/istio"
+            _ "github.com/open-telemetry/opentelemetry-collector"
+            _ "github.com/hashicorp/consul"
+          )
+
+          func main() {}
+          "@ | Out-File -Encoding UTF8 main.go
+
+      # Step 4: Download and build module cache
+      - name: Download Go modules
         shell: pwsh
         run: |
           go mod tidy
           go mod download all
-          Get-ChildItem go.sum
+          if (Test-Path go.sum) {
+            Write-Host "✅ go.sum generated successfully."
+          } else {
+            Write-Error "❌ go.sum not found!"
+          }
 
-      - name: Setup Go with cache
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.22
-          cache: true
-
-      - name: Verify cache size
+      # Step 5: Verify cache directories and size
+      - name: Check Go cache size
         shell: pwsh
         run: |
-          Write-Host "Go module cache size:"
-          Get-ChildItem "$env:GOPATH/pkg/mod" -Recurse | Measure-Object -Property Length -Sum | ForEach-Object { $_.Sum / 1GB }
-          Write-Host "Go build cache size:"
-          Get-ChildItem "$env:LOCALAPPDATA/go-build" -Recurse | Measure-Object -Property Length -Sum | ForEach-Object { $_.Sum / 1GB }
+          $modCache = (go env GOMODCACHE)
+          $buildCache = (go env GOCACHE)
+          Write-Host "Module cache path: $modCache"
+          Write-Host "Build cache path: $buildCache"
+
+          if (Test-Path $modCache) {
+            $sizeGB = (Get-ChildItem -Recurse $modCache | Measure-Object -Property Length -Sum).Sum / 1GB
+            Write-Host ("📦 Go module cache size: {0:N2} GB" -f $sizeGB)
+          } else {
+            Write-Host "⚠️ Module cache not found."
+          }
+
+          if (Test-Path $buildCache) {
+            $sizeGB2 = (Get-ChildItem -Recurse $buildCache | Measure-Object -Property Length -Sum).Sum / 1GB
+            Write-Host ("🛠️  Go build cache size: {0:N2} GB" -f $sizeGB2)
+          } else {
+            Write-Host "⚠️ Build cache not found."
+          }
