@@ -41,10 +41,15 @@ jobs:
           go mod tidy
           go mod download all
 
-      - name: Display cache size
+      - name: Check Go module cache size
         run: |
-          du -sh $env:GOPATH/pkg/mod 2>$null || du -sh ~/go/pkg/mod 2>/dev/null || echo "Unable to compute size"
-
+          $path = "${env:GOPATH}\pkg\mod"
+          if (Test-Path $path) {
+            $size = (Get-ChildItem -Recurse $path | Measure-Object -Property Length -Sum).Sum / 1GB
+            Write-Host ("Go module cache size: {0:N2} GB" -f $size)
+          } else {
+            Write-Host "Cache path not found: $path"
+          }
       - name: Measure cache restore time
         run: |
           echo "Measuring setup-go cache restore time..."
