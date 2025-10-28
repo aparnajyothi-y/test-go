@@ -1,59 +1,75 @@
-name: Reproduce Slow Cache Load on Windows
+name: Generate Big Go Cache (Windows)
 
 on:
   workflow_dispatch:
 
 jobs:
-  big-cache-test:
+  build:
     runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Set up Go
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: 1.22
           cache: true
 
-      - name: Create go.mod
-        run: |
-          echo "module bigcachetest" > go.mod
-          echo "" >> go.mod
-          echo "go 1.22" >> go.mod
-          echo "" >> go.mod
-          echo "require (" >> go.mod
-          echo "  k8s.io/kubernetes v1.30.0" >> go.mod
-          echo "  github.com/moby/moby v25.0.0+incompatible" >> go.mod
-          echo "  github.com/hashicorp/terraform v1.5.7" >> go.mod
-          echo "  github.com/aws/aws-sdk-go v1.49.0" >> go.mod
-          echo "  github.com/prometheus/prometheus v2.53.0+incompatible" >> go.mod
-          echo "  github.com/grafana/grafana v11.0.0+incompatible" >> go.mod
-          echo "  github.com/apache/beam v2.56.0+incompatible" >> go.mod
-          echo "  github.com/google/go-containerregistry v0.18.0" >> go.mod
-          echo "  github.com/grpc/grpc-go v1.61.1" >> go.mod
-          echo "  github.com/istio/istio v1.22.0" >> go.mod
-          echo "  github.com/open-telemetry/opentelemetry-collector v0.105.0" >> go.mod
-          echo "  github.com/hashicorp/consul v1.19.0" >> go.mod
-          echo ")" >> go.mod
+      - name: Verify Go environment
+        run: go env
+        shell: pwsh
 
-      - name: Populate cache (download all modules)
+      - name: Create large go.mod file
+        shell: pwsh
+        run: |
+          @"
+          module bigcachetest
+
+          go 1.22
+
+          require (
+            k8s.io/kubernetes v1.30.0
+            github.com/moby/moby v25.0.0+incompatible
+            github.com/hashicorp/terraform v1.5.7
+            github.com/aws/aws-sdk-go v1.49.0
+            github.com/prometheus/prometheus v2.53.0+incompatible
+            github.com/grafana/grafana v11.0.0+incompatible
+            github.com/apache/beam v2.56.0+incompatible
+            github.com/google/go-containerregistry v0.18.0
+            github.com/grpc/grpc-go v1.61.1
+            github.com/istio/istio v1.22.0
+            github.com/open-telemetry/opentelemetry-collector v0.105.0
+            github.com/hashicorp/consul v1.19.0
+          )
+          "@ | Out-File -Encoding UTF8 go.mod
+
+      - name: Download dependencies (this generates the cache)
         run: |
           go mod tidy
           go mod download all
+        shell: pwsh
+
+      - name: Display Go module cache path
+        run: go env GOMODCACHE
+        shell: pwsh
 
       - name: Check Go module cache size
+        shell: pwsh
         run: |
-          $path = "${env:GOPATH}\pkg\mod"
+          $goPath = $env:GOPATH
+          if (-not $goPath) {
+            $goPath = "$env:USERPROFILE\go"
+          }
+          $path = Join-Path $goPath "pkg\mod"
           if (Test-Path $path) {
             $size = (Get-ChildItem -Recurse $path | Measure-Object -Property Length -Sum).Sum / 1GB
             Write-Host ("Go module cache size: {0:N2} GB" -f $size)
           } else {
             Write-Host "Cache path not found: $path"
           }
-      - name: Measure cache restore time
-        run: |
-          echo "Measuring setup-go cache restore time..."
-          echo "Start: $(Get-Date)"
-          # force re-run of setup-go to simulate restore
-          Remove-Item -Recurse -Force "$env:RUNNER_TOOL_CACHE\go" -ErrorAction SilentlyContinue
-          echo "Re-running setup-go..."
+
+      - name: Verify Go version
+        run: go version
+        shell: pwsh
