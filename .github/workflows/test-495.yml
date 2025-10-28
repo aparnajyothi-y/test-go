@@ -17,7 +17,7 @@ jobs:
           go-version: '1.22'
           cache: true
 
-      - name: Create go.mod with heavy dependencies
+      - name: Create go.mod with large dependencies
         shell: pwsh
         run: |
           @"
@@ -31,10 +31,9 @@ jobs:
             github.com/google/go-containerregistry v0.18.0
             github.com/prometheus/client_golang v1.19.0
             github.com/hashicorp/consul v1.19.0
-            github.com/grpc/grpc-go v1.61.1
-            github.com/apache/beam v2.56.0+incompatible
-            github.com/istio/istio v1.22.0
-            github.com/open-telemetry/opentelemetry-collector v0.105.0
+            google.golang.org/grpc v1.61.1
+            go.opentelemetry.io/collector v0.105.0
+            github.com/apache/arrow/go/v14 v14.0.2
           )
           "@ | Out-File -Encoding UTF8 go.mod
 
@@ -43,6 +42,7 @@ jobs:
         run: |
           @"
           package main
+
           import (
             "fmt"
             _ "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,40 +51,44 @@ jobs:
             _ "github.com/google/go-containerregistry/pkg/v1"
             _ "github.com/prometheus/client_golang/prometheus"
             _ "github.com/hashicorp/consul/api"
-            _ "github.com/grpc/grpc-go"
-            _ "github.com/apache/beam"
-            _ "github.com/istio/istio"
-            _ "github.com/open-telemetry/opentelemetry-collector"
+            _ "google.golang.org/grpc"
+            _ "go.opentelemetry.io/collector/component"
+            _ "github.com/apache/arrow/go/v14/arrow"
           )
+
           func main() {
-            fmt.Println("Generating large Go module cache...")
+            fmt.Println("Building large Go module cache...")
           }
           "@ | Out-File -Encoding UTF8 main.go
 
-      - name: Download Go modules and build cache
+      - name: Download and build modules
         shell: pwsh
         run: |
           Write-Host "Running go mod tidy..."
           go mod tidy -v
-          Write-Host "Running go mod download..."
+
+          Write-Host "Downloading modules..."
           go mod download -x
+
+          Write-Host "Forcing go.sum generation..."
+          go get ./...
+
           if (Test-Path go.sum) {
             Write-Host "✅ go.sum generated successfully."
           } else {
             Write-Error "❌ go.sum not found!"
           }
 
-          Write-Host "Building binary to populate cache..."
+          Write-Host "Building project to populate build cache..."
           go build -v -o main.exe .
 
-      - name: Check Go cache size
+      - name: Show Go cache size
         shell: pwsh
         run: |
           $modCache = (go env GOMODCACHE)
           $buildCache = (go env GOCACHE)
-
-          Write-Host "Module cache path: $modCache"
-          Write-Host "Build cache path: $buildCache"
+          Write-Host "Module cache: $modCache"
+          Write-Host "Build cache: $buildCache"
 
           if (Test-Path $modCache) {
             $sizeGB = (Get-ChildItem -Recurse $modCache -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1GB
