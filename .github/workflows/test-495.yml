@@ -1,98 +1,55 @@
-name: Repro Slow Cache Restore on Windows
+name: Repro Setup-Go Cache Issue
 
 on:
   workflow_dispatch:
 
 jobs:
-  slow-cache-test:
+  repro-cache:
     runs-on: windows-latest
-
-    env:
-      # Force Go cache directories to the slower C: drive
-      GOCACHE: C:\Users\runneradmin\AppData\Local\go-build
-      GOMODCACHE: C:\Users\runneradmin\go\pkg\mod
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Step 1: Setup Go without the internal cache
-      - name: Setup Go (cache disabled)
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-          cache: false
+          cache: true
 
-      # Step 2: Restore large cache manually from previous run (or will create on first run)
-      - name: Restore Go cache manually
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.GOCACHE }}
-            ${{ env.GOMODCACHE }}
-          key: go-windows-c-drive-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-windows-c-drive-
-
-      # Step 3: Create a large go.mod file
-      - name: Create go.mod and dummy main.go
-        shell: pwsh
+      - name: Initialize Go project
         run: |
-          @"
-          module bigcachetest
-          go 1.22
-          require (
-            k8s.io/kubernetes v1.30.0
-            github.com/moby/moby v25.0.0+incompatible
-            github.com/hashicorp/terraform v1.5.7
-            github.com/aws/aws-sdk-go v1.49.0
-            github.com/prometheus/prometheus v2.53.0+incompatible
-            github.com/grafana/grafana v11.0.0+incompatible
-            github.com/apache/beam v2.56.0+incompatible
-            github.com/google/go-containerregistry v0.18.0
-            google.golang.org/grpc v1.61.1
-            github.com/istio/istio v1.22.0
-            github.com/open-telemetry/opentelemetry-collector v0.105.0
-            github.com/hashicorp/consul v1.19.0
-          )
-          "@ | Out-File -Encoding UTF8 go.mod
-
-          @"
-          package main
-          import (
-            _ "k8s.io/kubernetes"
-            _ "github.com/moby/moby"
-            _ "github.com/hashicorp/terraform"
-            _ "github.com/aws/aws-sdk-go/aws"
-            _ "github.com/prometheus/prometheus"
-            _ "github.com/grafana/grafana"
-            _ "github.com/apache/beam"
-            _ "github.com/google/go-containerregistry/pkg/v1"
-            _ "google.golang.org/grpc"
-            _ "github.com/istio/istio"
-            _ "github.com/open-telemetry/opentelemetry-collector"
-            _ "github.com/hashicorp/consul"
-          )
-          func main() {}
-          "@ | Out-File -Encoding UTF8 main.go
-
-      # Step 4: Download all dependencies
-      - name: Populate module cache
-        shell: pwsh
-        run: |
-          Write-Host "Running go mod tidy and download..."
+          mkdir large-project
+          cd large-project
+          go mod init large-project
+          # Heavy, valid modules only
+          go get github.com/aws/aws-sdk-go@v1.49.0
+          go get github.com/kubernetes/client-go@v0.30.0
+          go get github.com/prometheus/client_golang@v1.18.0
+          go get github.com/open-telemetry/opentelemetry-go@v1.24.0
+          go get github.com/hashicorp/terraform-plugin-sdk/v2@v2.33.0
+          go get google.golang.org/grpc@v1.61.1
+          go get github.com/apache/beam@v2.56.0+incompatible
           go mod tidy
-          go mod download all
-          Write-Host "Module cache size:"
-          $sizeGB = (Get-ChildItem -Recurse $env:GOMODCACHE | Measure-Object -Property Length -Sum).Sum / 1GB
-          Write-Host ("📦 Go module cache size: {0:N2} GB" -f $sizeGB)
 
-      # Step 5: Save the cache (this will be large ~1.7GB)
-      - name: Save Go cache
-        if: always()
+      - name: Build to populate cache
+        run: |
+          cd large-project
+          go build ./...
+
+      - name: Measure cache sizes
+        shell: pwsh
+        run: |
+          $modCache = (go env GOMODCACHE)
+          $buildCache = (go env GOCACHE)
+          Write-Host "Module cache: $modCache"
+          Write-Host "Build cache: $buildCache"
+          Write-Host "📦 Go module cache size: $((Get-ChildItem $modCache -Recurse | Measure-Object -Property Length -Sum).Sum / 1GB) GB"
+          Write-Host "🛠️ Go build cache size: $((Get-ChildItem $buildCache -Recurse | Measure-Object -Property Length -Sum).Sum / 1GB) GB"
+
+      - name: Save cache manually (to confirm size)
         uses: actions/cache@v4
         with:
           path: |
-            ${{ env.GOCACHE }}
-            ${{ env.GOMODCACHE }}
-          key: go-windows-c-drive-${{ hashFiles('**/go.sum') }}
+            ~\go\pkg\mod
+            ~\AppData\Local\go-build
+          key: ${{ runner.os }}-go-modcache-repro-${{ hashFiles('**/go.sum') }}
