@@ -1,0 +1,62 @@
+name: Reproduce Slow Cache Load on Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      # Generate a large Go module cache (~1.7 GB)
+      - name: Create go.mod with heavy dependencies
+        run: |
+          cat <<EOF > go.mod
+          module bigcachetest
+
+          go 1.22
+
+          require (
+            k8s.io/kubernetes v1.30.0
+            github.com/moby/moby v25.0.0+incompatible
+            github.com/hashicorp/terraform v1.5.7
+            github.com/aws/aws-sdk-go v1.49.0
+            github.com/prometheus/prometheus v2.53.0+incompatible
+            github.com/grafana/grafana v11.0.0+incompatible
+            github.com/apache/beam v2.56.0+incompatible
+            github.com/google/go-containerregistry v0.18.0
+            github.com/grpc/grpc-go v1.61.1
+            github.com/istio/istio v1.22.0
+            github.com/open-telemetry/opentelemetry-collector v0.105.0
+            github.com/hashicorp/consul v1.19.0
+          )
+          EOF
+
+      - name: Populate cache (download all modules)
+        run: |
+          go mod tidy
+          go mod download all
+
+      - name: Display cache size
+        run: |
+          du -sh $env:GOPATH/pkg/mod 2>$null || du -sh ~/go/pkg/mod 2>/dev/null || echo "Unable to compute size"
+
+      - name: Measure cache restore time
+        run: |
+          echo "Measuring setup-go cache restore time..."
+          echo "Start: $(Get-Date)"
+          # force re-run of setup-go to simulate restore
+          Remove-Item -Recurse -Force "$env:RUNNER_TOOL_CACHE\go" -ErrorAction SilentlyContinue
+          echo "Re-running setup-go..."
