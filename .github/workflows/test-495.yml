@@ -1,32 +1,20 @@
-name: Generate Big Go Cache (Windows)
+name: Generate Large Go Cache
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  cache-go:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.22
-          cache: true
-
-      - name: Verify Go environment
-        run: go env
-        shell: pwsh
-
-      - name: Create large go.mod file
+      - name: Create big go.mod
         shell: pwsh
         run: |
           @"
           module bigcachetest
-
           go 1.22
 
           require (
@@ -45,31 +33,23 @@ jobs:
           )
           "@ | Out-File -Encoding UTF8 go.mod
 
-      - name: Download dependencies (this generates the cache)
+      - name: Generate go.sum
+        shell: pwsh
         run: |
           go mod tidy
           go mod download all
-        shell: pwsh
+          Get-ChildItem go.sum
 
-      - name: Display Go module cache path
-        run: go env GOMODCACHE
-        shell: pwsh
+      - name: Setup Go with cache
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.22
+          cache: true
 
-      - name: Check Go module cache size
+      - name: Verify cache size
         shell: pwsh
         run: |
-          $goPath = $env:GOPATH
-          if (-not $goPath) {
-            $goPath = "$env:USERPROFILE\go"
-          }
-          $path = Join-Path $goPath "pkg\mod"
-          if (Test-Path $path) {
-            $size = (Get-ChildItem -Recurse $path | Measure-Object -Property Length -Sum).Sum / 1GB
-            Write-Host ("Go module cache size: {0:N2} GB" -f $size)
-          } else {
-            Write-Host "Cache path not found: $path"
-          }
-
-      - name: Verify Go version
-        run: go version
-        shell: pwsh
+          Write-Host "Go module cache size:"
+          Get-ChildItem "$env:GOPATH/pkg/mod" -Recurse | Measure-Object -Property Length -Sum | ForEach-Object { $_.Sum / 1GB }
+          Write-Host "Go build cache size:"
+          Get-ChildItem "$env:LOCALAPPDATA/go-build" -Recurse | Measure-Object -Property Length -Sum | ForEach-Object { $_.Sum / 1GB }
