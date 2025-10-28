@@ -5,7 +5,7 @@ on:
 
 jobs:
   reproduce-windows-cache-slow:
-    name: Windows Cache Slow (C: drive)
+    name: Windows Cache Slow
     runs-on: windows-latest
 
     steps:
