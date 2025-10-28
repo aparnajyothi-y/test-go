@@ -7,7 +7,7 @@ on:
 jobs:
   reproduce-windows-cache-slow:
     name: Windows Cache Slow
-    runs-on: windows-2019
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
@@ -20,7 +20,7 @@ jobs:
           echo "GOMODCACHE=$env:USERPROFILE\go\pkg\mod" >> $env:GITHUB_ENV
       # Step 2: Setup Go
       - name: Setup Go 1.22
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.22'
           cache: true
