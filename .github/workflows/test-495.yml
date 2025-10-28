@@ -1,38 +1,46 @@
-name: Reproduce Slow Cache Restore on Windows
+name: Repro Slow Cache Restore on Windows
 
 on:
   workflow_dispatch:
 
 jobs:
-  reproduce-windows-cache-slow:
-    name: Windows Cache Slow
+  slow-cache-test:
     runs-on: windows-latest
 
+    env:
+      # Force Go cache directories to the slower C: drive
+      GOCACHE: C:\Users\runneradmin\AppData\Local\go-build
+      GOMODCACHE: C:\Users\runneradmin\go\pkg\mod
+
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # Step 1: Force old slow cache locations
-      - name: Override Go cache locations (C drive)
-        run: |
-          echo "GOCACHE=$env:USERPROFILE\AppData\Local\go-build" >> $env:GITHUB_ENV
-          echo "GOMODCACHE=$env:USERPROFILE\go\pkg\mod" >> $env:GITHUB_ENV
-
-      # Step 2: Setup Go
-      - name: Setup Go 1.22
+      # Step 1: Setup Go without the internal cache
+      - name: Setup Go (cache disabled)
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-          cache: true
+          cache: false
 
-      # Step 3: Create large go.mod to download ~1.7 GB of deps
-      - name: Create large dependency file
+      # Step 2: Restore large cache manually from previous run (or will create on first run)
+      - name: Restore Go cache manually
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.GOCACHE }}
+            ${{ env.GOMODCACHE }}
+          key: go-windows-c-drive-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-windows-c-drive-
+
+      # Step 3: Create a large go.mod file
+      - name: Create go.mod and dummy main.go
         shell: pwsh
         run: |
           @"
           module bigcachetest
           go 1.22
-
           require (
             k8s.io/kubernetes v1.30.0
             github.com/moby/moby v25.0.0+incompatible
@@ -42,58 +50,49 @@ jobs:
             github.com/grafana/grafana v11.0.0+incompatible
             github.com/apache/beam v2.56.0+incompatible
             github.com/google/go-containerregistry v0.18.0
-            github.com/grpc/grpc-go v1.61.1
+            google.golang.org/grpc v1.61.1
             github.com/istio/istio v1.22.0
             github.com/open-telemetry/opentelemetry-collector v0.105.0
             github.com/hashicorp/consul v1.19.0
           )
           "@ | Out-File -Encoding UTF8 go.mod
 
-      # Step 4: Download all dependencies
-      - name: Download Go modules
-        run: |
-          go mod tidy
-          go mod download all
+          @"
+          package main
+          import (
+            _ "k8s.io/kubernetes"
+            _ "github.com/moby/moby"
+            _ "github.com/hashicorp/terraform"
+            _ "github.com/aws/aws-sdk-go/aws"
+            _ "github.com/prometheus/prometheus"
+            _ "github.com/grafana/grafana"
+            _ "github.com/apache/beam"
+            _ "github.com/google/go-containerregistry/pkg/v1"
+            _ "google.golang.org/grpc"
+            _ "github.com/istio/istio"
+            _ "github.com/open-telemetry/opentelemetry-collector"
+            _ "github.com/hashicorp/consul"
+          )
+          func main() {}
+          "@ | Out-File -Encoding UTF8 main.go
 
-      # Step 5: Check cache directory sizes
-      - name: Measure Go cache sizes
+      # Step 4: Download all dependencies
+      - name: Populate module cache
         shell: pwsh
         run: |
-          $modCache = go env GOMODCACHE
-          $buildCache = go env GOCACHE
-          Write-Host "📦 Go module cache: $modCache"
-          Write-Host "🛠️ Go build cache: $buildCache"
-          if (Test-Path $modCache) {
-            du -sh $modCache 2>$null || (Get-ChildItem -Recurse $modCache | Measure-Object -Property Length -Sum).Sum
-          }
-          if (Test-Path $buildCache) {
-            du -sh $buildCache 2>$null || (Get-ChildItem -Recurse $buildCache | Measure-Object -Property Length -Sum).Sum
-          }
+          Write-Host "Running go mod tidy and download..."
+          go mod tidy
+          go mod download all
+          Write-Host "Module cache size:"
+          $sizeGB = (Get-ChildItem -Recurse $env:GOMODCACHE | Measure-Object -Property Length -Sum).Sum / 1GB
+          Write-Host ("📦 Go module cache size: {0:N2} GB" -f $sizeGB)
 
-      # Step 6: Save cache manually (for reuse)
+      # Step 5: Save the cache (this will be large ~1.7GB)
       - name: Save Go cache
+        if: always()
         uses: actions/cache@v4
         with:
           path: |
-            ${{ env.GOMODCACHE }}
             ${{ env.GOCACHE }}
-          key: windows-go-modcache-test-${{ hashFiles('**/go.sum') }}
-
-  reproduce-windows-cache-fast:
-    name: Windows Cache Fast
-    runs-on: windows-latest
-    needs: reproduce-windows-cache-slow
-
-    steps:
-      - uses: actions/checkout@v4
-
-      # Step 1: Setup Go (normal fast config)
-      - name: Setup Go 1.22
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          cache: true
-
-      - name: Measure Go cache restore speed
-        run: |
-          Write-Host "✅ Expect fast restore (< 1 min) from D: drive"
+            ${{ env.GOMODCACHE }}
+          key: go-windows-c-drive-${{ hashFiles('**/go.sum') }}
