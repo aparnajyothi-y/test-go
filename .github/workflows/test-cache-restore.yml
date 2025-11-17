@@ -1,5 +1,5 @@
 name: Setup GO
-on: workflow_dispatch
+on: push
 
 jobs:
   build:
@@ -22,12 +22,10 @@ jobs:
           path: |
             $GOMODCACHE
             $GOCACHE
-          # Match the actual setup-go key structure:
-          # setup-go-<os>-<arch>-<os-version>-go-<resolved-version>-<hash>
-          key: setup-go-${{ runner.os }}-${{ runner.arch }}-${{ runner.os-version }}-go-${{ steps.setup.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
+          key: setup-go-${{ runner.os }}-${{ runner.arch }}-${{ runner.image }}-go-${{ steps.setup.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            setup-go-${{ runner.os }}-${{ runner.arch }}-${{ runner.os-version }}-go-${{ steps.setup.outputs.go-version }}-
-            setup-go-${{ runner.os }}-${{ runner.arch }}-${{ runner.os-version }}-go-
+            setup-go-${{ runner.os }}-${{ runner.arch }}-${{ runner.image }}-go-${{ steps.setup.outputs.go-version }}-
+            setup-go-${{ runner.os }}-${{ runner.arch }}-${{ runner.image }}-go-
             setup-go-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Download modules
