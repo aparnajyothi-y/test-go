@@ -1,69 +1,67 @@
-name: Test Go Cache Keys Across Runners
+name: Test Go Cache on All Runners
 
 on: push
 
 jobs:
   build:
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-
-    runs-on: ${{ matrix.os }}
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
+      # Checkout
       - uses: actions/checkout@v5
 
-      # Setup Go without caching
+      # Setup Go (cache disabled)
       - name: Setup Go
         id: setup-go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: "1.24"
           cache: false
 
-      # Normalize arch
-      - name: Save lowercase arch
-        shell: bash
-        run: echo "ARCH=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-
-      # Normalize IMAGE_OS (Linux, Windows, macOS)
+      # Normalize IMAGE_OS for ALL runners
       - name: Set IMAGE_OS
         shell: bash
         run: |
-          # GitHub exposes ImageOS differently per runner type.
-          
-          if [ "${{ runner.os }}" = "Linux" ]; then
+          # Linux runners expose $ImageOS
+          if [ "$RUNNER_OS" = "Linux" ] && [ -n "$ImageOS" ]; then
             echo "IMAGE_OS=${ImageOS}-" >> $GITHUB_ENV
-          elif [ "${{ runner.os }}" = "Windows" ]; then
-            echo "IMAGE_OS=${ImageOS}-" >> $GITHUB_ENV
-          elif [ "${{ runner.os }}" = "macOS" ]; then
-            echo "IMAGE_OS=${ImageOS}-" >> $GITHUB_ENV
+          # macOS & Windows runners do NOT define $ImageOS
           else
-            echo "IMAGE_OS=" >> $GITHUB_ENV
+            echo "IMAGE_OS=${RUNNER_OS}-" >> $GITHUB_ENV
           fi
 
-      # Show debugging info
-      - name: Print env info
-        run: |
-          echo "OS: ${{ runner.os }}"
-          echo "ARCH: $ARCH"
-          echo "IMAGE_OS: $IMAGE_OS"
+      # Normalize architecture (lowercase)
+      - name: Set ARCH
+        shell: bash
+        run: echo "ARCH=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # Restore Go cache
+      # Set cache paths (OS-safe)
+      - name: Set Cache Paths
+        shell: bash
+        run: |
+          echo "GO_MOD_CACHE=$(go env GOMODCACHE)" >> $GITHUB_ENV
+          echo "GO_BUILD_CACHE=$(go env GOCACHE)" >> $GITHUB_ENV
+
+      # Restore cache
       - name: Restore Go cache
         uses: actions/cache/restore@v4
         id: go-cache
         with:
           path: |
-            ${{ env.GOMODCACHE }}
-            ${{ env.GOCACHE }}
-          key: setup-go-${{ runner.os }}-${{ env.ARCH }}-${{ env.IMAGE_OS }}go-${{ steps['setup-go'].outputs.go-version }}-${{ hashFiles('**/go.sum') }}
+            ${{ env.GO_MOD_CACHE }}
+            ${{ env.GO_BUILD_CACHE }}
+          key: setup-go-${{ runner.os }}-${{ env.ARCH }}-${{ env.IMAGE_OS }}go-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            setup-go-${{ runner.os }}-${{ env.ARCH }}-${{ env.IMAGE_OS }}go-${{ steps['setup-go'].outputs.go-version }}-
-            setup-go-${{ runner.os }}-
+            setup-go-${{ runner.os }}-${{ env.ARCH }}-${{ env.IMAGE_OS }}go-${{ steps.setup-go.outputs.go-version }}-
+            setup-go-
 
+      # Install modules
       - name: Download modules
         run: go mod download
 
+      # Build project
       - name: Build
         run: go build ./...
