@@ -1,16 +1,20 @@
 name: Setup GO
-on: push
+on: workflow_dispatch
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v5
+
       - name: Setup Go
+        id: setup
         uses: actions/setup-go@v6
         with:
           go-version: '1.24'
           cache: false
+
       - name: Restore Go cache
         uses: actions/cache/restore@v4
         id: go-cache
@@ -18,10 +22,16 @@ jobs:
           path: |
             $GOMODCACHE
             $GOCACHE
-          key: setup-go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
+          # Match the actual setup-go key structure:
+          # setup-go-<os>-<arch>-<os-version>-go-<resolved-version>-<hash>
+          key: setup-go-${{ runner.os }}-${{ runner.arch }}-${{ runner.os-version }}-go-${{ steps.setup.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            setup-go-${{ runner.os }}-
+            setup-go-${{ runner.os }}-${{ runner.arch }}-${{ runner.os-version }}-go-${{ steps.setup.outputs.go-version }}-
+            setup-go-${{ runner.os }}-${{ runner.arch }}-${{ runner.os-version }}-go-
+            setup-go-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Download modules
         run: go mod download
+
       - name: Build
         run: go build ./...
