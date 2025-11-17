@@ -22,11 +22,9 @@ jobs:
           path: |
             $GOMODCACHE
             $GOCACHE
-          key: setup-go-${{ runner.os }}-${{ runner.arch }}-${{ runner.image }}-go-${{ steps.setup.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
+          key: ${{ steps.setup.outputs.cache-primary-key }}
           restore-keys: |
-            setup-go-${{ runner.os }}-${{ runner.arch }}-${{ runner.image }}-go-${{ steps.setup.outputs.go-version }}-
-            setup-go-${{ runner.os }}-${{ runner.arch }}-${{ runner.image }}-go-
-            setup-go-${{ runner.os }}-${{ runner.arch }}-
+            ${{ steps.setup.outputs.cache-prefix }}
 
       - name: Download modules
         run: go mod download
