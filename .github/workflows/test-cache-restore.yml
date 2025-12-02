@@ -1,15 +1,19 @@
 name: Setup GO
-on: workflow_dispatch
+on:
+  workflow_dispatch
 
 jobs:
   build:
-   runs-on: ${{ matrix.os }}
-   strategy:
+    runs-on: ${{ matrix.os }}
+    strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
-   steps:
+    steps:
+      # Checkout code
       - uses: actions/checkout@v5
+
+      # Setup Go
       - name: Setup Go
         id: setup-go
         uses: actions/setup-go@v6
@@ -17,28 +21,44 @@ jobs:
           go-version: '1.24'
           cache: false
 
+      # Set Go cache environment variables
       - name: Set Go cache environment variables
+        shell: bash
         run: |
-            echo "GO_MOD_CACHE=$(go env GOMODCACHE)" >> $GITHUB_ENV
-            echo "GO_BUILD_CACHE=$(go env GOCACHE)" >> $GITHUB_ENV     
+          echo "GO_MOD_CACHE=$(go env GOMODCACHE)" >> $GITHUB_ENV
+          echo "GO_BUILD_CACHE=$(go env GOCACHE)" >> $GITHUB_ENV
+
+      # Set IMAGE_OS environment variable (cross-platform)
       - name: Set IMAGE_OS environment variable
         run: |
-            if [ "$RUNNER_OS" = "Linux" ]; then
-              echo "IMAGE_OS=$ImageOS-" >> $GITHUB_ENV
-            else
-              echo "IMAGE_OS=" >> $GITHUB_ENV
-            fi
-      - name: Save lowercase arch
-        run: echo "ARCH=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          if [[ "${RUNNER_OS}" == "Linux" ]]; then
+            echo "IMAGE_OS=${ImageOS}-" >> $GITHUB_ENV
+          else
+            echo "IMAGE_OS=" >> $GITHUB_ENV
+        shell: bash
 
+      # Save lowercase architecture
+      - name: Save lowercase ARCH
+        shell: bash
+        run: |
+          echo "ARCH=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      # Restore Go cache
       - name: Restore Go cache
         uses: actions/cache/restore@v4
         id: go-cache
         with:
           path: |
-               ${{ env.GO_MOD_CACHE }}
-               ${{ env.GO_BUILD_CACHE }}    
+            ${{ env.GO_MOD_CACHE }}
+            ${{ env.GO_BUILD_CACHE }}
           key: setup-go-${{ runner.os }}-${{ env.ARCH }}-${{ env.IMAGE_OS }}-go-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-              setup-go-${{ runner.os }}-${{ env.ARCH }}-${{ env.IMAGE_OS }}-go-${{ steps.setup-go.outputs.go-version }}-
-              setup-go-
+            setup-go-${{ runner.os }}-${{ env.ARCH }}-${{ env.IMAGE_OS }}-go-${{ steps.setup-go.outputs.go-version }}-
+            setup-go-
+
+      # Example build step
+      - name: Build Go project
+        shell: bash
+        run: |
+          go version
+          go build -v ./...
