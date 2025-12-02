@@ -1,6 +1,5 @@
 name: Setup GO
-on:
-  workflow_dispatch
+on: workflow_dispatch
 
 jobs:
   build:
@@ -20,22 +19,22 @@ jobs:
           cache: false
 
       - name: Set Go cache environment variables
+        shell: bash
         run: |
           echo "GO_MOD_CACHE=$(go env GOMODCACHE)" >> $GITHUB_ENV
           echo "GO_BUILD_CACHE=$(go env GOCACHE)" >> $GITHUB_ENV
-        shell: bash
 
-      - name: Set IMAGE_OS environment variable
+      - name: Set IMAGE_OS environment variable (cross-platform)
         run: |
-          if [ "${RUNNER_OS}" = "Linux" ]; then
+          if [[ "${RUNNER_OS}" == "Linux" ]]; then
             echo "IMAGE_OS=linux-" >> $GITHUB_ENV
-          elif [ "${RUNNER_OS}" = "macOS" ]; then
+          elif [[ "${RUNNER_OS}" == "macOS" ]]; then
             echo "IMAGE_OS=macos-" >> $GITHUB_ENV
           else
             echo "IMAGE_OS=" >> $GITHUB_ENV
         shell: bash
 
-      - name: Save lowercase ARCH
+      - name: Save lowercase arch (cross-platform)
         run: |
           echo "ARCH=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
         shell: bash
@@ -51,9 +50,3 @@ jobs:
           restore-keys: |
             setup-go-${{ runner.os }}-${{ env.ARCH }}-${{ env.IMAGE_OS }}-go-${{ steps.setup-go.outputs.go-version }}-
             setup-go-
-
-      - name: Build Go project
-        run: |
-          go version
-          go build -v ./...
-        shell: bash
