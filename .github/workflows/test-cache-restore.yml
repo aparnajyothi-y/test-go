@@ -19,14 +19,12 @@ jobs:
           go-version: '1.24'
           cache: false
 
-      # Set Go cache environment variables
       - name: Set Go cache environment variables
         run: |
           echo "GO_MOD_CACHE=$(go env GOMODCACHE)" >> $GITHUB_ENV
           echo "GO_BUILD_CACHE=$(go env GOCACHE)" >> $GITHUB_ENV
         shell: bash
 
-      # Set IMAGE_OS environment variable
       - name: Set IMAGE_OS environment variable
         run: |
           if [ "${RUNNER_OS}" = "Linux" ]; then
@@ -37,13 +35,11 @@ jobs:
             echo "IMAGE_OS=" >> $GITHUB_ENV
         shell: bash
 
-      # Save lowercase ARCH
       - name: Save lowercase ARCH
         run: |
           echo "ARCH=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
         shell: bash
 
-      # Restore Go cache
       - name: Restore Go cache
         uses: actions/cache/restore@v4
         id: go-cache
