@@ -19,10 +19,10 @@ jobs:
           cache: false
 
       - name: Set Go cache environment variables
-        shell: bash
         run: |
           echo "GO_MOD_CACHE=$(go env GOMODCACHE)" >> $GITHUB_ENV
           echo "GO_BUILD_CACHE=$(go env GOCACHE)" >> $GITHUB_ENV
+        shell: bash
 
       - name: Set IMAGE_OS environment variable (cross-platform)
         run: |
@@ -34,7 +34,7 @@ jobs:
             echo "IMAGE_OS=" >> $GITHUB_ENV
         shell: bash
 
-      - name: Save lowercase arch (cross-platform)
+      - name: Save lowercase architecture
         run: |
           echo "ARCH=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
         shell: bash
