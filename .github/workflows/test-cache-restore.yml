@@ -30,16 +30,6 @@ jobs:
           echo "IMAGE_OS=$IMAGE_OS" >> $GITHUB_ENV
 
 
-      - name: Set IMAGE_OS environment variable (cross-platform)
-        run: |
-          if [[ "${RUNNER_OS}" == "Linux" ]]; then
-            echo "IMAGE_OS=linux-" >> $GITHUB_ENV
-          elif [[ "${RUNNER_OS}" == "macOS" ]]; then
-            echo "IMAGE_OS=macos-" >> $GITHUB_ENV
-          else
-            echo "IMAGE_OS=" >> $GITHUB_ENV
-        shell: bash
-
       - name: Save lowercase architecture
         run: |
           echo "ARCH=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
