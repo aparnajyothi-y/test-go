@@ -58,7 +58,7 @@ jobs:
           path: |
             ${{ env.GO_MOD_CACHE }}
             ${{ env.GO_BUILD_CACHE }}
-          key: setup-go-${{ runner.os }}-${{ env.ARCH }}-${{ env.IMAGE_OS }}-go-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
+          key: setup-go-${{ runner.os }}-${{ env.ARCH }}-go-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
 
       - name: Download modules
         run: go mod download
