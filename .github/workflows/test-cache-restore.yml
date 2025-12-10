@@ -46,10 +46,6 @@ jobs:
         if: runner.os == 'Linux'
         run: echo "CACHE_OS_SUFFIX=$ImageOS-" >> $GITHUB_ENV
 
-      - name: Set cache OS suffix (macOS/Windows)
-        if: runner.os != 'Linux'
-        run: echo "CACHE_OS_SUFFIX=" >> $GITHUB_ENV
-
       - name: Restore Go cache
         id: go-cache
         uses: actions/cache/restore@v4
