@@ -18,30 +18,41 @@ jobs:
           go-version: '1.24'
           cache: false
 
+      # Capture Go cache locations
       - name: Set Go cache variables (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           echo "GO_MOD_CACHE=$(go env GOMODCACHE)" >> $GITHUB_ENV
           echo "GO_BUILD_CACHE=$(go env GOCACHE)" >> $GITHUB_ENV
+
       - name: Set Go cache variables (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           echo "GO_MOD_CACHE=$(go env GOMODCACHE)" | Out-File $env:GITHUB_ENV -Append
           echo "GO_BUILD_CACHE=$(go env GOCACHE)"   | Out-File $env:GITHUB_ENV -Append
-      - name: Save lowercase arch (POSIX)
+
+      # runner.arch casing differs across platforms (e.g. X64 vs x64).
+      # Normalizing it avoids cache key mismatches.
+      - name: Normalize runner architecture
+        shell: bash
         if: runner.os != 'Windows'
         run: echo "ARCH=$(echo '${{ runner.arch }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      - name: Save lowercase arch (Windows)
+      - name: Normalize runner architecture (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $arch = "${{ runner.arch }}".ToLower()
-          echo "ARCH=$arch" | Out-File $env:GITHUB_ENV -Append
-      - name: Set cache OS suffix (Ubuntu only)
-        if: runner.os == 'Linux'
-        run: echo "CACHE_OS_SUFFIX=$ImageOS-" >> $GITHUB_ENV
+          echo "ARCH=${{ runner.arch.ToLower() }}" | Out-File $env:GITHUB_ENV -Append
+
+      # Always define CACHE_OS_SUFFIX so it is safe to use in cache keys
+      - name: Set cache OS suffix
+        shell: bash
+        run: |
+          echo "CACHE_OS_SUFFIX=" >> $GITHUB_ENV
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            echo "CACHE_OS_SUFFIX=$ImageOS-" >> $GITHUB_ENV
+          fi
 
       - name: Restore Go cache
         id: go-cache
@@ -51,7 +62,6 @@ jobs:
             ${{ env.GO_MOD_CACHE }}
             ${{ env.GO_BUILD_CACHE }}
           key: setup-go-${{ runner.os }}-${{ env.ARCH }}-${{ env.CACHE_OS_SUFFIX }}go-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
-      
       - name: Download modules
         run: go mod download
 
