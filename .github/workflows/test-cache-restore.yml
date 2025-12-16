@@ -57,12 +57,12 @@ jobs:
           $arch = "${{ runner.arch }}".ToLower()
           echo "ARCH=$arch" | Out-File $env:GITHUB_ENV -Append
 
-      # Sets CACHE_OS_SUFFIX per platform
+      # Sets CACHE_OS_SUFFIX per platform (matches first workflow)
       - name: Set cache OS suffix (Linux/macOS)
         if: runner.os != 'Windows'
         shell: bash
-        run: echo "CACHE_OS_SUFFIX=$ImageOS-" >> $GITHUB_ENV
-
+        run: echo "CACHE_OS_SUFFIX=" >> $GITHUB_ENV
+      
       - name: Set cache OS suffix (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
